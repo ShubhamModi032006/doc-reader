@@ -32,6 +32,9 @@ export async function processDocumentIngestion(documentId: string): Promise<void
     tempFilesToClean.push(tempOriginalPath);
 
     let targetPdfPath: string | null = doc.file_type === 'pdf' ? tempOriginalPath : null;
+    if (doc.file_type === 'pdf') {
+      await saveDocumentFile(documentId, 'viewer_pdf', originalBuffer);
+    }
 
     // Handle DOCX conversion to PDF for unified viewer & highlight boxes
     if (doc.file_type === 'docx') {
