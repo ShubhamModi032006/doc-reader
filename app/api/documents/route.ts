@@ -63,12 +63,7 @@ export async function POST(req: NextRequest) {
 
     const docId = randomUUID();
 
-    // Store file in Postgres DB
-    await saveDocumentFile(docId, 'original', buffer);
-    if (ext === '.pdf') {
-      await saveDocumentFile(docId, 'viewer_pdf', buffer);
-    }
-
+    // 1. Create document row FIRST so foreign key reference exists
     const doc = await createDocument({
       id: docId,
       name: filename,
@@ -77,7 +72,13 @@ export async function POST(req: NextRequest) {
       file_size: file.size,
     });
 
-    // Asynchronously trigger processing without blocking response
+    // 2. Store file data in Postgres DB
+    await saveDocumentFile(docId, 'original', buffer);
+    if (ext === '.pdf') {
+      await saveDocumentFile(docId, 'viewer_pdf', buffer);
+    }
+
+    // 3. Asynchronously trigger processing without blocking response
     processDocumentIngestion(doc.id).catch((e) => console.error('Background ingestion error:', e));
 
     return NextResponse.json(doc, { status: 201 });
