@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
+import os from 'os';
 import fs from 'fs';
 import { randomUUID } from 'crypto';
 import { getDocumentById } from '@/lib/db/documents';
+import { getDocumentFile, saveDocumentFile } from '@/lib/db/files';
 import { runPythonScript } from '@/lib/extract/runPython';
 
 export async function POST(req: NextRequest) {
+  const tempFiles: string[] = [];
+
   try {
     const body = await req.json();
     const { documentId, edits } = body;
@@ -23,29 +27,50 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Tracked-change redlining is supported for DOCX files only.' }, { status: 400 });
     }
 
-    const storageDir = path.join(process.cwd(), 'storage');
+    const originalBuffer = await getDocumentFile(documentId, 'original');
+    if (!originalBuffer) {
+      return NextResponse.json({ error: 'Original DOCX file not found in database' }, { status: 404 });
+    }
+
+    const tempDir = os.tmpdir();
     const redlinedId = randomUUID();
-    const outputFilename = `redlined_${redlinedId}.docx`;
-    const outputPath = path.join(storageDir, outputFilename);
+    const tempInputPath = path.join(tempDir, `redline_in_${documentId}_${redlinedId}.docx`);
+    const tempOutputPath = path.join(tempDir, `redlined_${redlinedId}.docx`);
+
+    fs.writeFileSync(tempInputPath, originalBuffer);
+    tempFiles.push(tempInputPath);
+    tempFiles.push(tempOutputPath);
 
     const editsJson = JSON.stringify(edits);
 
     const result = await runPythonScript('redline_docx.py', [
-      doc.original_path,
+      tempInputPath,
       editsJson,
-      outputPath,
+      tempOutputPath,
     ]);
 
-    if (!result.success || !fs.existsSync(outputPath)) {
+    if (!result.success || !fs.existsSync(tempOutputPath)) {
       return NextResponse.json({ error: 'Failed to generate redlined DOCX' }, { status: 500 });
     }
 
+    const redlinedBuffer = fs.readFileSync(tempOutputPath);
+    const kindKey = `redline_${redlinedId}`;
+    await saveDocumentFile(documentId, kindKey, redlinedBuffer);
+
     return NextResponse.json({
       success: true,
-      downloadUrl: `/api/redline/download?file=${outputFilename}`,
+      downloadUrl: `/api/redline/download?file=redlined_${redlinedId}.docx`,
       editsApplied: result.edits_applied,
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
+  } finally {
+    for (const f of tempFiles) {
+      if (fs.existsSync(f)) {
+        try {
+          fs.unlinkSync(f);
+        } catch (_) {}
+      }
+    }
   }
 }

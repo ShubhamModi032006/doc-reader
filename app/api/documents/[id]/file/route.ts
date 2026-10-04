@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs';
 import { getDocumentById } from '@/lib/db/documents';
+import { getDocumentFile } from '@/lib/db/files';
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -9,16 +9,15 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       return NextResponse.json({ error: 'Document not found' }, { status: 404 });
     }
 
-    const filePath = doc.converted_pdf_path && fs.existsSync(doc.converted_pdf_path)
-      ? doc.converted_pdf_path
-      : doc.original_path;
+    const buffer = (await getDocumentFile(params.id, 'viewer_pdf')) || (await getDocumentFile(params.id, 'original'));
 
-    if (!fs.existsSync(filePath)) {
-      return NextResponse.json({ error: 'File not found on server disk' }, { status: 404 });
+    if (!buffer) {
+      return NextResponse.json({ error: 'File data not found in database' }, { status: 404 });
     }
 
-    const buffer = fs.readFileSync(filePath);
-    const contentType = filePath.endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream';
+    const contentType = doc.file_type === 'pdf' || (await getDocumentFile(params.id, 'viewer_pdf'))
+      ? 'application/pdf'
+      : 'application/octet-stream';
 
     return new Response(buffer, {
       headers: {

@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS documents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     file_type TEXT NOT NULL, -- 'pdf' or 'docx'
-    original_path TEXT NOT NULL,
+    original_path TEXT DEFAULT '',
     converted_pdf_path TEXT,
     file_size BIGINT NOT NULL,
     page_count INT NOT NULL DEFAULT 0,
@@ -14,6 +14,15 @@ CREATE TABLE IF NOT EXISTS documents (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS document_files (
+    document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    kind VARCHAR(32) NOT NULL, -- 'original' or 'viewer_pdf'
+    data BYTEA NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (document_id, kind)
+);
+
 
 CREATE TABLE IF NOT EXISTS document_pages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

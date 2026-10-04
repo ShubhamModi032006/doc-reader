@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
-import fs from 'fs';
 import { randomUUID } from 'crypto';
 import { createDocument, listDocuments } from '@/lib/db/documents';
+import { saveDocumentFile } from '@/lib/db/files';
 import { processDocumentIngestion } from '@/lib/extract/ingest';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
@@ -58,20 +58,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const storageDir = path.join(process.cwd(), 'storage');
-    if (!fs.existsSync(storageDir)) {
-      fs.mkdirSync(storageDir, { recursive: true });
-    }
-
     const docId = randomUUID();
-    const savePath = path.join(storageDir, `${docId}${ext}`);
-    fs.writeFileSync(savePath, buffer);
+
+    // Store file in Postgres DB
+    await saveDocumentFile(docId, 'original', buffer);
+    if (ext === '.pdf') {
+      await saveDocumentFile(docId, 'viewer_pdf', buffer);
+    }
 
     const doc = await createDocument({
       id: docId,
       name: filename,
       file_type: ext === '.pdf' ? 'pdf' : 'docx',
-      original_path: savePath,
+      original_path: '',
       file_size: file.size,
     });
 

@@ -2,6 +2,8 @@
 
 A high-performance, full-stack legal document analysis platform. Upload contracts (PDF or DOCX), chat with them using streaming responses backed by **verified quotes**, jump directly to cited passages with interactive bounding-box highlights, compare two document versions side-by-side with rule-based significance scoring, and generate tracked-change DOCX redlines.
 
+> ⚡ **Free Hosting Note**: On free web hosting (e.g. Render), the service spins down after inactivity. The first page load or request may take about 60 seconds to start.
+
 ---
 
 ## 📷 UI Walkthrough & Features

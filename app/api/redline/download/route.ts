@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import path from 'path';
-import fs from 'fs';
+import { getDocumentFileByKind } from '@/lib/db/files';
 
 export async function GET(req: NextRequest) {
   try {
@@ -11,12 +10,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid filename' }, { status: 400 });
     }
 
-    const filePath = path.join(process.cwd(), 'storage', filename);
-    if (!fs.existsSync(filePath)) {
-      return NextResponse.json({ error: 'File not found' }, { status: 404 });
-    }
+    const redlineId = filename.replace('.docx', '');
+    const buffer = await getDocumentFileByKind(redlineId);
 
-    const buffer = fs.readFileSync(filePath);
+    if (!buffer) {
+      return NextResponse.json({ error: 'File not found in database' }, { status: 404 });
+    }
 
     return new Response(buffer, {
       headers: {

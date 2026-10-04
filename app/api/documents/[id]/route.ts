@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs';
 import { getDocumentById, deleteDocumentById } from '@/lib/db/documents';
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
@@ -19,14 +18,6 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     const doc = await deleteDocumentById(params.id);
     if (!doc) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 });
-    }
-
-    // Delete stored files from disk
-    if (doc.original_path && fs.existsSync(doc.original_path)) {
-      fs.unlinkSync(doc.original_path);
-    }
-    if (doc.converted_pdf_path && fs.existsSync(doc.converted_pdf_path)) {
-      fs.unlinkSync(doc.converted_pdf_path);
     }
 
     return NextResponse.json({ success: true, id: params.id });
