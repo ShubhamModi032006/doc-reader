@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+export const dynamic = 'force-dynamic';
+
 import { createMessage, updateMessage } from '@/lib/db/messages';
 import { getChatById } from '@/lib/db/chats';
 import { getDocumentById } from '@/lib/db/documents';

@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+export const dynamic = 'force-dynamic';
+
 import path from 'path';
 import { randomUUID } from 'crypto';
 import { createDocument, listDocuments } from '@/lib/db/documents';

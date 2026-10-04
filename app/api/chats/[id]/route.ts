@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+export const dynamic = 'force-dynamic';
+
 import { getChatById, deleteChatById } from '@/lib/db/chats';
 import { listMessagesByChatId } from '@/lib/db/messages';
 

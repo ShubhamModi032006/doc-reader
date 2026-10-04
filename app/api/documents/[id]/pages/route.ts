@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+export const dynamic = 'force-dynamic';
+
 import { query } from '@/lib/db/pool';
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {

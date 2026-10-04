@@ -1,4 +1,4 @@
-FROM node:20-bookworm-slim
+FROM node:22-bookworm-slim
 
 # Python + LibreOffice
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -17,6 +17,9 @@ COPY package*.json ./
 RUN npm ci
 COPY . .
 RUN npm run build
+
+# Prune dev dependencies after build to shrink final image
+RUN npm prune --omit=dev
 
 ENV NODE_ENV=production
 EXPOSE 3000

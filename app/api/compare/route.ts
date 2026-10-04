@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+export const dynamic = 'force-dynamic';
+
 import { getDocumentById } from '@/lib/db/documents';
 import { parseClauses } from '@/lib/compare/parseClauses';
 import { alignClauses } from '@/lib/compare/align';

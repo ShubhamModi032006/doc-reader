@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+export const dynamic = 'force-dynamic';
+
 import { getDocumentFileByKind } from '@/lib/db/files';
 
 export async function GET(req: NextRequest) {
@@ -17,7 +20,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'File not found in database' }, { status: 404 });
     }
 
-    return new Response(buffer, {
+    return new Response(new Uint8Array(buffer), {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'Content-Disposition': `attachment; filename="${filename}"`,

@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+export const dynamic = 'force-dynamic';
+
 import { getDocumentById } from '@/lib/db/documents';
 import { getDocumentFile } from '@/lib/db/files';
 
@@ -19,7 +22,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       ? 'application/pdf'
       : 'application/octet-stream';
 
-    return new Response(buffer, {
+    return new Response(new Uint8Array(buffer), {
       headers: {
         'Content-Type': contentType,
         'Content-Disposition': `inline; filename="${doc.name}"`,
