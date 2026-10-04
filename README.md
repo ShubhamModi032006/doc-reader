@@ -8,7 +8,10 @@ A high-performance, full-stack legal document analysis platform. Upload contract
 
 ## 📷 UI Walkthrough & Features
 
+![Legal Contract Analyser Interface](docs/ui_demo.png)
+
 - **Upload & Automated Processing**: Fast validation of PDF/DOCX header magic bytes and size limits (<= 50MB). Automated background pipeline handles text extraction, page word bounding boxes, clause chunking, and LibreOffice conversion.
+
 - **Scanned PDF Detection**: Automatically detects scanned documents with insufficient selectable text (< 25 chars/page) and flags them with a `needs_ocr` status.
 - **Real Groq AI Provider & Automatic Fallback**: Powered by Groq (`llama-3.1-8b-instant`). If Groq is unavailable, unconfigured, or rate-limited, the system silently falls back to the manual provider and notifies the user with a UI toast and badge.
 - **Verified Quotes System**: Every answer quote (AI-generated or manual) is verified against canonical document text using NFKC normalisation, character offset mapping, and conservative fuzzy matching. Clicking a verified quote opens the document viewer at the exact page and passage.
