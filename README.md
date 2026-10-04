@@ -2,7 +2,9 @@
 
 A high-performance, full-stack legal document analysis platform. Upload contracts (PDF or DOCX), chat with them using streaming responses backed by **verified quotes**, jump directly to cited passages with interactive bounding-box highlights, compare two document versions side-by-side with rule-based significance scoring, and generate tracked-change DOCX redlines.
 
-> ⚡ **Free Hosting Note**: On free web hosting (e.g. Render), the service spins down after inactivity. The first page load or request may take about 60 seconds to start.
+🌐 **Live Application URL**: [https://doc-reader-w931.onrender.com](https://doc-reader-w931.onrender.com)
+
+> ⚡ **Free Hosting Note**: Hosted on Render free tier + Neon PostgreSQL. Free services spin down after inactivity; the initial load may take about 60 seconds to start from a cold start.
 
 ---
 
@@ -11,7 +13,7 @@ A high-performance, full-stack legal document analysis platform. Upload contract
 ![Legal Contract Analyser Interface](docs/ui_demo.png)
 
 - **Upload & Automated Processing**: Fast validation of PDF/DOCX header magic bytes and size limits (<= 50MB). Automated background pipeline handles text extraction, page word bounding boxes, clause chunking, and LibreOffice conversion.
-
+- **Database Persistence**: File binaries (original documents, converted viewer PDFs, and redlined DOCX outputs) are stored as `BYTEA` in PostgreSQL (`document_files` table), guaranteeing files persist permanently across container restarts and redeployments without disk volume dependence.
 - **Scanned PDF Detection**: Automatically detects scanned documents with insufficient selectable text (< 25 chars/page) and flags them with a `needs_ocr` status.
 - **Real Groq AI Provider & Automatic Fallback**: Powered by Groq (`llama-3.1-8b-instant`). If Groq is unavailable, unconfigured, or rate-limited, the system silently falls back to the manual provider and notifies the user with a UI toast and badge.
 - **Verified Quotes System**: Every answer quote (AI-generated or manual) is verified against canonical document text using NFKC normalisation, character offset mapping, and conservative fuzzy matching. Clicking a verified quote opens the document viewer at the exact page and passage.
@@ -21,10 +23,10 @@ A high-performance, full-stack legal document analysis platform. Upload contract
 
 ```
 [ Upload Box ] ──> [ Python Extraction ] ──> [ Clause Chunker ] ──> [ Postgres FTS ]
-                           │                                              │
-                    [ LibreOffice PDF ]                          [ Groq AI / Manual ]
-                           │                                              │
-                   [ PDF.js Viewer ] <───── [ Verified Quotes ] ──────────┘
+                            │                                              │
+                     [ LibreOffice PDF ]                          [ Groq AI / Manual ]
+                            │                                              │
+                    [ PDF.js Viewer ] <───── [ Verified Quotes ] ──────────┘
 ```
 
 ---
@@ -37,7 +39,7 @@ A high-performance, full-stack legal document analysis platform. Upload contract
 
 ### Environment Variables (.env)
 ```env
-DATABASE_URL=postgres://postgres@localhost:5432/legal_contract_analyser
+DATABASE_URL=postgresql://user:password@ep-xyz.neon.tech/neondb?sslmode=require
 
 LLM_PROVIDER=groq            # groq | manual
 LLM_API_KEY=gsk_your_groq_api_key_here
@@ -65,34 +67,34 @@ The system wraps the Groq AI provider in a resilient `FallbackProvider`:
 ## 🛠️ Tech Stack
 
 - **Frontend & API**: Next.js 14 (App Router) + TypeScript + Tailwind CSS
-- **Database**: PostgreSQL (Raw SQL queries via `pg` pool — NO ORM)
+- **Database**: Neon PostgreSQL (Raw SQL queries via `pg` pool — NO ORM) with SSL support
+- **Runtime**: Node.js 22 (`node:22-bookworm-slim` Docker image)
 - **AI Provider**: Groq API (`POST /chat/completions` OpenAI-compatible API)
 - **Python Processing**: PyMuPDF (`pymupdf`), `python-docx`, `lxml`
 - **Document Viewing**: `pdfjs-dist` (Canvas rendering with SVG/div highlight overlays)
 - **Headless Document Conversion**: LibreOffice (`soffice --headless --convert-to pdf`)
-- **Testing**: Vitest for TypeScript & API logic, Pytest for Python scripts
+- **Testing**: Vitest for TypeScript & API logic (46 tests), Pytest for Python scripts (4 tests)
 
 ---
 
 ## 🚀 Local Setup Guide
 
 ### 1. Prerequisites
-- Node.js >= 18
+- Node.js >= 22
 - Python 3.10+
-- PostgreSQL (Local server or Neon / Supabase database instance)
+- PostgreSQL (Local server or Neon database instance)
 - LibreOffice (Optional but recommended for DOCX PDF conversion)
 
 ### 2. Environment Setup
 ```bash
 cp .env.example .env
-# Add your LLM_API_KEY if testing with Groq
+# Add your DATABASE_URL and LLM_API_KEY if testing with Groq
 ```
 
 ### 3. Install Dependencies & Setup Database
 ```bash
-npm install --legacy-peer-deps
+npm install
 pip install -r python/requirements.txt
-psql -U postgres -c "CREATE DATABASE legal_contract_analyser;"
 npm run migrate
 ```
 
@@ -107,22 +109,23 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ## 🧪 Testing Summary & Coverage
 
 ```bash
-# Run all TypeScript logic, Groq client, quote parser, fallback provider, & E2E tests
+# Run all TypeScript unit, integration, fallback provider, & BYTEA storage tests (46 tests)
 npm run test
 
-# Run Python extraction and redline tests
+# Run Python extraction and redline tests (4 tests)
 npm run pytest
 ```
 
 ### What Was Tested
 1. **Mocked Unit & Integration Tests (Vitest)**:
+   - `test_postgres_storage.test.ts`: Verified BYTEA storage, document ingestion, viewer PDF persistence, and `ON DELETE CASCADE` behavior without any disk storage dependency.
    - `groqClient.test.ts`: SSE parsing, 401 AuthError, 429 RateLimitError with retry-after header, 500 ServerError, 30s timeout, user AbortSignal.
    - `quoteParser.test.ts`: Inline `<quote doc="D1">` parsing, tags split across stream chunks, unknown doc labels (`documentId: null`), nested/garbled tags, unclosed tags at stream end, `NOT_FOUND` response handling.
    - `fallbackProvider.test.ts`: Pre-stream fallback, mid-stream interruption preservation, user Stop handling, circuit breaker opening (3 failures) and recovery.
    - `e2e_verification.test.ts`: Verified that an invented quote emitted by mocked LLM is caught by the quote verifier and displayed as `unverified` (not clickable), while verbatim quotes pass as `verified`.
    - `compare.test.ts` & `big_document.test.ts`: 150-page document chunking, FTS retrieval, and clause comparison pipeline.
 2. **Real API Integration**:
-   - Manually tested with real Groq API key (`llama-3.1-8b-instant`) for multi-document Q&A streaming, clause comparison AI summaries, and AI redline edit suggestions.
+   - Tested live on Render + Neon with Groq API key (`llama-3.1-8b-instant`) for multi-document Q&A streaming, clause comparison AI summaries, and AI redline edit suggestions.
 
 ---
 
