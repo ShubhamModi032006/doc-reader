@@ -3,9 +3,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Configure pdfjs worker
+// Configure pdfjs worker using unpkg CDN with legacy fallback
 if (typeof window !== 'undefined' && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 }
 
 interface DocViewerProps {
@@ -30,6 +30,7 @@ export const DocViewer: React.FC<DocViewerProps> = ({
   const [currentPage, setCurrentPage] = useState<number>(targetPage);
   const [scale, setScale] = useState<number>(1.2);
   const [loading, setLoading] = useState<boolean>(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [pagesData, setPagesData] = useState<any[]>([]);
   const [highlights, setHighlights] = useState<Array<{ x0: number; y0: number; x1: number; y1: number }>>([]);
 
@@ -46,7 +47,7 @@ export const DocViewer: React.FC<DocViewerProps> = ({
     if (!documentId) return;
     fetch(`/api/documents/${documentId}/pages`)
       .then((res) => res.json())
-      .then((data) => setPagesData(data || []))
+      .then((data) => setPagesData(Array.isArray(data) ? data : []))
       .catch((e) => console.error('Failed to load page word boxes:', e));
   }, [documentId]);
 
@@ -54,6 +55,7 @@ export const DocViewer: React.FC<DocViewerProps> = ({
   useEffect(() => {
     if (!documentId) return;
     setLoading(true);
+    setErrorMsg(null);
 
     const pdfUrl = `/api/documents/${documentId}/file`;
     const loadingTask = pdfjsLib.getDocument({ url: pdfUrl });
@@ -63,10 +65,15 @@ export const DocViewer: React.FC<DocViewerProps> = ({
         pdfDocRef.current = pdf;
         setNumPages(pdf.numPages);
         setLoading(false);
-        renderPage(currentPage, pdf);
+        if (pdf.numPages > 0) {
+          renderPage(Math.min(currentPage, pdf.numPages), pdf);
+        } else {
+          setErrorMsg('Document has 0 pages or failed extraction.');
+        }
       })
       .catch((err) => {
         console.error('Error loading PDF canvas:', err);
+        setErrorMsg('Failed to load PDF document. If this was uploaded earlier, please delete and re-upload it.');
         setLoading(false);
       });
 
@@ -82,7 +89,7 @@ export const DocViewer: React.FC<DocViewerProps> = ({
 
   // Render page onto canvas
   const renderPage = async (pageNo: number, pdfDoc = pdfDocRef.current) => {
-    if (!pdfDoc || !canvasRef.current) return;
+    if (!pdfDoc || !canvasRef.current || pageNo <= 0) return;
 
     // Cancel any previous render task on this canvas
     if (renderTaskRef.current) {
@@ -143,7 +150,6 @@ export const DocViewer: React.FC<DocViewerProps> = ({
       }
     } catch (e: any) {
       if (e?.name === 'RenderingCancelledException' || e?.message?.includes('cancelled')) {
-        // Ignored: expected when a new render interrupts a previous one
         return;
       }
       console.error('Page render error:', e);
@@ -151,10 +157,10 @@ export const DocViewer: React.FC<DocViewerProps> = ({
   };
 
   useEffect(() => {
-    if (pdfDocRef.current) {
+    if (pdfDocRef.current && numPages > 0) {
       renderPage(currentPage);
     }
-  }, [currentPage, scale, highlightOccurrence, pagesData]);
+  }, [currentPage, scale, highlightOccurrence, pagesData, numPages]);
 
   if (!documentId) return null;
 
@@ -170,17 +176,17 @@ export const DocViewer: React.FC<DocViewerProps> = ({
         <div className="flex items-center gap-2 text-xs">
           <button
             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            disabled={currentPage <= 1}
+            disabled={currentPage <= 1 || numPages === 0}
             className="p-1 px-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 rounded"
           >
             ◀ Prev
           </button>
           <span>
-            Page {currentPage} of {numPages}
+            Page {numPages > 0 ? currentPage : 0} of {numPages}
           </span>
           <button
             onClick={() => setCurrentPage((p) => Math.min(numPages, p + 1))}
-            disabled={currentPage >= numPages}
+            disabled={currentPage >= numPages || numPages === 0}
             className="p-1 px-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 rounded"
           >
             Next ▶
@@ -188,13 +194,15 @@ export const DocViewer: React.FC<DocViewerProps> = ({
 
           <button
             onClick={() => setScale((s) => Math.min(2.5, s + 0.2))}
-            className="p-1 px-2 bg-slate-800 hover:bg-slate-700 rounded"
+            disabled={numPages === 0}
+            className="p-1 px-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 rounded"
           >
             🔍 +
           </button>
           <button
             onClick={() => setScale((s) => Math.max(0.6, s - 0.2))}
-            className="p-1 px-2 bg-slate-800 hover:bg-slate-700 rounded"
+            disabled={numPages === 0}
+            className="p-1 px-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 rounded"
           >
             🔍 -
           </button>
@@ -208,25 +216,53 @@ export const DocViewer: React.FC<DocViewerProps> = ({
       </div>
 
       {/* Canvas Container */}
-      <div className="flex-1 overflow-auto p-4 flex justify-center relative bg-slate-950">
-        <div className="relative inline-block border border-slate-800 shadow-2xl rounded-md overflow-hidden">
-          <canvas ref={canvasRef} className="block" />
-
-          {/* Highlight overlays */}
-          {highlights.map((rect, idx) => (
-            <div
-              key={idx}
-              style={{
-                position: 'absolute',
-                left: `${rect.x0}px`,
-                top: `${rect.y0}px`,
-                width: `${rect.x1 - rect.x0}px`,
-                height: `${rect.y1 - rect.y0}px`,
+      <div className="flex-1 overflow-auto p-4 flex justify-center items-center relative bg-slate-950">
+        {errorMsg ? (
+          <div className="max-w-md p-6 bg-slate-900 border border-red-500/40 rounded-xl text-center shadow-xl">
+            <div className="text-red-400 font-semibold mb-2">Document Viewing Notice</div>
+            <div className="text-xs text-slate-300 mb-4">{errorMsg}</div>
+            <button
+              onClick={() => {
+                setLoading(true);
+                setErrorMsg(null);
+                const loadingTask = pdfjsLib.getDocument({ url: `/api/documents/${documentId}/file` });
+                loadingTask.promise
+                  .then((pdf) => {
+                    pdfDocRef.current = pdf;
+                    setNumPages(pdf.numPages);
+                    setLoading(false);
+                    renderPage(1, pdf);
+                  })
+                  .catch(() => {
+                    setLoading(false);
+                    setErrorMsg('Unable to render PDF. Please delete this file from the left sidebar and re-upload.');
+                  });
               }}
-              className="bg-yellow-400/40 border-2 border-amber-500 rounded-sm animate-pulse transition-all pointer-events-none shadow-lg shadow-amber-500/50"
-            />
-          ))}
-        </div>
+              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-xs font-medium rounded-md transition-colors"
+            >
+              Retry Loading
+            </button>
+          </div>
+        ) : (
+          <div className="relative inline-block border border-slate-800 shadow-2xl rounded-md overflow-hidden">
+            <canvas ref={canvasRef} className="block" />
+
+            {/* Highlight overlays */}
+            {highlights.map((rect, idx) => (
+              <div
+                key={idx}
+                style={{
+                  position: 'absolute',
+                  left: `${rect.x0}px`,
+                  top: `${rect.y0}px`,
+                  width: `${rect.x1 - rect.x0}px`,
+                  height: `${rect.y1 - rect.y0}px`,
+                }}
+                className="bg-yellow-400/40 border-2 border-amber-500 rounded-sm animate-pulse transition-all pointer-events-none shadow-lg shadow-amber-500/50"
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
